@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sync-Listening</title>
 
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+
     <style>
         * {
             box-sizing: border-box;
@@ -20,37 +22,61 @@
         }
 
         .container {
-            max-width: 850px;
-            margin: 50px auto;
-            padding: 25px;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        header {
+            margin-bottom: 30px;
         }
 
         h1 {
             color: #9b8cff;
-            font-size: 34px;
+            font-size: 36px;
+            margin-bottom: 8px;
         }
 
         .subtitle {
             color: #999;
-            margin-bottom: 30px;
         }
 
         .panel {
             background: #1c1d25;
+            border: 1px solid #30313d;
             border-radius: 14px;
             padding: 22px;
             margin-bottom: 20px;
         }
 
         h2 {
-            font-size: 20px;
+            font-size: 21px;
             margin-top: 0;
         }
 
-        input[type="file"] {
-            display: block;
-            margin: 18px 0;
+        h3 {
+            color: #c5baff;
+        }
+
+        input {
+            background: #292a35;
             color: white;
+            border: 1px solid #414250;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            width: 100%;
+            margin: 8px 0;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #927fff;
+        }
+
+        input[type="file"] {
+            border: none;
+            padding-left: 0;
         }
 
         button {
@@ -58,13 +84,31 @@
             color: white;
             border: none;
             border-radius: 8px;
-            padding: 11px 20px;
+            padding: 11px 18px;
             cursor: pointer;
             font-size: 14px;
+            margin-top: 8px;
+            transition: 0.2s;
         }
 
         button:hover {
             background: #927fff;
+        }
+
+        button.secondary {
+            background: #363744;
+        }
+
+        button.secondary:hover {
+            background: #4a4b5b;
+        }
+
+        button.danger {
+            background: #a83f4c;
+        }
+
+        button.danger:hover {
+            background: #c54c5a;
         }
 
         .track {
@@ -82,25 +126,93 @@
             overflow-wrap: anywhere;
         }
 
-        audio {
-            width: 100%;
-            margin-top: 20px;
+        .track button {
+            flex-shrink: 0;
         }
 
-        #message {
-            color: #a99aff;
+        audio {
+            width: 100%;
             margin-top: 15px;
+        }
+
+        .message {
+            color: #a99aff;
+            margin-top: 12px;
+            min-height: 18px;
+        }
+
+        .error {
+            color: #ff7777;
+        }
+
+        .success {
+            color: #72d69a;
+        }
+
+        .room-info {
+            background: #292a35;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 18px;
+        }
+
+        .room-code {
+            font-size: 25px;
+            font-weight: bold;
+            color: #a99aff;
+            letter-spacing: 3px;
+            margin: 10px 0;
+        }
+
+        .user-item {
+            background: #292a35;
+            padding: 11px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            background: #363744;
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        .status.online {
+            color: #72d69a;
+            background: #20372d;
+        }
+
+        footer {
+            color: #666;
+            text-align: center;
+            margin-top: 35px;
+            font-size: 13px;
         }
 
         @media (max-width: 600px) {
             .container {
-                margin: 20px auto;
-                padding: 15px;
+                margin: 15px auto;
+                padding: 12px;
+            }
+
+            h1 {
+                font-size: 29px;
             }
 
             .track {
                 align-items: flex-start;
                 flex-direction: column;
+            }
+
+            .track button {
+                width: 100%;
             }
         }
     </style>
@@ -110,60 +222,202 @@
 
 <div class="container">
 
-    <h1>Sync-Listening</h1>
-    <p class="subtitle">
-        Совместное прослушивание музыки в реальном времени
-    </p>
+    <header>
+        <h1>Sync-Listening</h1>
+        <p class="subtitle">
+            Совместное прослушивание музыки в реальном времени
+        </p>
+        <span class="status" id="connectionStatus">
+            Подключение...
+        </span>
+    </header>
 
-    <div class="panel">
+
+    <!-- Загрузка музыки -->
+    <section class="panel">
+
         <h2>Загрузка музыки</h2>
 
-        <input type="file" id="musicFile" accept=".mp3,audio/mpeg">
+        <p class="subtitle">
+            Выбери MP3-файл для добавления в библиотеку
+        </p>
 
-        <button onclick="uploadMusic()">Загрузить композицию</button>
+        <input
+            type="file"
+            id="musicFile"
+            accept=".mp3,audio/mpeg"
+        >
 
-        <div id="message"></div>
-    </div>
+        <button onclick="uploadMusic()">
+            Загрузить композицию
+        </button>
 
-    <div class="panel">
+        <div class="message" id="uploadMessage"></div>
+
+    </section>
+
+
+    <!-- Музыкальная библиотека -->
+    <section class="panel">
+
         <h2>Музыкальная библиотека</h2>
 
         <div id="trackList">
             Загрузка композиций...
         </div>
-    </div>
 
-    <div class="panel">
-        <h2>Плеер</h2>
+        <button class="secondary" onclick="loadTracks()">
+            Обновить библиотеку
+        </button>
 
-        <div id="currentTrack">Композиция не выбрана</div>
+    </section>
 
-        <audio id="audioPlayer" controls></audio>
-    </div>
+
+    <!-- Музыкальные комнаты -->
+    <section class="panel">
+
+        <h2>Музыкальные комнаты</h2>
+
+        <p class="subtitle">
+            Создай комнату или подключись к существующей
+        </p>
+
+        <input
+            type="text"
+            id="username"
+            placeholder="Введи своё имя"
+            maxlength="30"
+        >
+
+        <button onclick="createRoom()">
+            Создать комнату
+        </button>
+
+        <div style="margin-top: 20px;">
+            <input
+                type="text"
+                id="roomCode"
+                placeholder="Введи код комнаты"
+                maxlength="6"
+            >
+
+            <button onclick="joinRoom()">
+                Подключиться к комнате
+            </button>
+        </div>
+
+        <div class="message" id="roomMessage"></div>
+
+        <div id="roomInfo" class="room-info hidden">
+
+            <h3>Текущая комната</h3>
+
+            <div class="room-code" id="roomTitle"></div>
+
+            <p>Участники комнаты:</p>
+
+            <div id="roomUsers"></div>
+
+            <button class="secondary" onclick="copyRoomCode()">
+                Скопировать код
+            </button>
+
+            <button class="danger" onclick="leaveRoom()">
+                Покинуть комнату
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <!-- Плеер -->
+    <section class="panel">
+
+        <h2>Музыкальный плеер</h2>
+
+        <div id="currentTrack" class="subtitle">
+            Композиция не выбрана
+        </div>
+
+        <audio id="audioPlayer" controls>
+            Твой браузер не поддерживает аудиоплеер.
+        </audio>
+
+    </section>
+
+
+    <footer>
+        Sync-Listening © 2026
+    </footer>
 
 </div>
 
-<script>
-    const audioPlayer = document.getElementById("audioPlayer");
-    const trackList = document.getElementById("trackList");
-    const message = document.getElementById("message");
 
-    // Загрузка композиции на сервер
+<script>
+
+    // Элементы страницы
+
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    const trackList = document.getElementById("trackList");
+
+    const uploadMessage = document.getElementById("uploadMessage");
+
+    const roomMessage = document.getElementById("roomMessage");
+
+    const roomInfo = document.getElementById("roomInfo");
+
+    const connectionStatus = document.getElementById("connectionStatus");
+
+
+    // Текущее состояние пользователя
+
+    let currentRoom = null;
+
+    let currentUsername = null;
+
+
+    // Подключение Socket.IO
+
+    const socket = io();
+
+
+    socket.on("connect", () => {
+        connectionStatus.textContent = "Подключено";
+        connectionStatus.classList.add("online");
+    });
+
+
+    socket.on("disconnect", () => {
+        connectionStatus.textContent = "Нет подключения";
+        connectionStatus.classList.remove("online");
+    });
+
+
+    // Загрузка музыки
+
     async function uploadMusic() {
+
         const fileInput = document.getElementById("musicFile");
+
         const file = fileInput.files[0];
 
         if (!file) {
-            message.textContent = "Выберите MP3-файл";
+            uploadMessage.textContent = "Выбери MP3-файл";
+            uploadMessage.className = "message error";
             return;
         }
 
         const formData = new FormData();
+
         formData.append("file", file);
 
-        message.textContent = "Загрузка...";
+        uploadMessage.textContent = "Загрузка...";
+        uploadMessage.className = "message";
 
         try {
+
             const response = await fetch("/api/tracks", {
                 method: "POST",
                 body: formData
@@ -175,23 +429,36 @@
                 throw new Error(result.detail || "Ошибка загрузки");
             }
 
-            message.textContent = "Композиция успешно загружена!";
+            uploadMessage.textContent =
+                "Композиция успешно загружена!";
+
+            uploadMessage.className = "message success";
+
             fileInput.value = "";
 
             await loadTracks();
 
         } catch (error) {
-            message.textContent = error.message;
+
+            uploadMessage.textContent = error.message;
+
+            uploadMessage.className = "message error";
+
         }
+
     }
 
-    // Получение списка композиций
+
+    // Получение музыкальной библиотеки
+
     async function loadTracks() {
+
         try {
+
             const response = await fetch("/api/tracks");
 
             if (!response.ok) {
-                throw new Error("Не удалось получить библиотеку");
+                throw new Error("Не удалось загрузить библиотеку");
             }
 
             const tracks = await response.json();
@@ -199,45 +466,271 @@
             trackList.innerHTML = "";
 
             if (tracks.length === 0) {
-                trackList.textContent = "Библиотека пока пуста";
+
+                trackList.textContent =
+                    "Музыкальная библиотека пока пуста";
+
                 return;
+
             }
 
             tracks.forEach(track => {
+
                 const item = document.createElement("div");
+
                 item.className = "track";
 
                 const name = document.createElement("span");
+
                 name.className = "track-name";
+
                 name.textContent = track.title;
 
                 const button = document.createElement("button");
+
                 button.textContent = "Слушать";
-                button.addEventListener("click", () => playTrack(track));
+
+                button.onclick = () => playTrack(track);
 
                 item.appendChild(name);
+
                 item.appendChild(button);
 
                 trackList.appendChild(item);
+
             });
 
         } catch (error) {
+
             trackList.textContent = error.message;
+
         }
+
     }
 
-    // Воспроизведение выбранной композиции
+
+    // Воспроизведение композиции
+
     function playTrack(track) {
+
         audioPlayer.src = track.url;
 
         document.getElementById("currentTrack").textContent =
             "Сейчас играет: " + track.title;
 
-        audioPlayer.play();
+        audioPlayer.play().catch(() => {
+            console.log("Для воспроизведения нажми кнопку Play");
+        });
+
     }
 
+
+    // Создание комнаты
+
+    async function createRoom() {
+
+        const username =
+            document.getElementById("username").value.trim();
+
+        if (!username) {
+
+            roomMessage.textContent = "Сначала введи своё имя";
+
+            roomMessage.className = "message error";
+
+            return;
+
+        }
+
+        try {
+
+            const response = await fetch("/api/rooms", {
+                method: "POST"
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || "Ошибка создания комнаты");
+            }
+
+            document.getElementById("roomCode").value = result.code;
+
+            roomMessage.textContent =
+                "Комната создана. Подключаемся...";
+
+            roomMessage.className = "message success";
+
+            joinRoom();
+
+        } catch (error) {
+
+            roomMessage.textContent = error.message;
+
+            roomMessage.className = "message error";
+
+        }
+
+    }
+
+
+    // Подключение к комнате
+
+    function joinRoom() {
+
+        const code =
+            document.getElementById("roomCode").value.trim().toUpperCase();
+
+        const username =
+            document.getElementById("username").value.trim();
+
+        if (!username) {
+
+            roomMessage.textContent = "Введи своё имя";
+
+            roomMessage.className = "message error";
+
+            return;
+
+        }
+
+        if (!code) {
+
+            roomMessage.textContent = "Введи код комнаты";
+
+            roomMessage.className = "message error";
+
+            return;
+
+        }
+
+        if (!socket.connected) {
+
+            roomMessage.textContent = "Нет подключения к серверу";
+
+            roomMessage.className = "message error";
+
+            return;
+
+        }
+
+        currentUsername = username;
+
+        socket.emit("join_room", {
+            code: code,
+            username: username
+        });
+
+    }
+
+
+    // Успешное подключение к комнате
+
+    socket.on("room_joined", data => {
+
+        currentRoom = data.code;
+
+        roomInfo.classList.remove("hidden");
+
+        document.getElementById("roomTitle").textContent = data.code;
+
+        roomMessage.textContent =
+            "Ты успешно подключился к комнате!";
+
+        roomMessage.className = "message success";
+
+    });
+
+
+    // Обновление участников
+
+    socket.on("room_users", users => {
+
+        const container = document.getElementById("roomUsers");
+
+        container.innerHTML = "";
+
+        users.forEach(username => {
+
+            const user = document.createElement("div");
+
+            user.className = "user-item";
+
+            user.textContent = "● " + username;
+
+            container.appendChild(user);
+
+        });
+
+    });
+
+
+    // Ошибки комнаты
+
+    socket.on("room_error", data => {
+
+        roomMessage.textContent = data.message;
+
+        roomMessage.className = "message error";
+
+    });
+
+
+    // Копирование кода комнаты
+
+    async function copyRoomCode() {
+
+        if (!currentRoom) {
+            return;
+        }
+
+        try {
+
+            await navigator.clipboard.writeText(currentRoom);
+
+            roomMessage.textContent = "Код комнаты скопирован!";
+
+            roomMessage.className = "message success";
+
+        } catch (error) {
+
+            roomMessage.textContent =
+                "Не удалось скопировать код. Скопируй его вручную.";
+
+        }
+
+    }
+
+
+    // Выход из комнаты
+
+    function leaveRoom() {
+
+        if (!currentRoom) {
+            return;
+        }
+
+        socket.emit("leave_room");
+
+        currentRoom = null;
+
+        roomInfo.classList.add("hidden");
+
+        document.getElementById("roomTitle").textContent = "";
+
+        document.getElementById("roomUsers").innerHTML = "";
+
+        roomMessage.textContent = "Ты покинул комнату";
+
+        roomMessage.className = "message success";
+
+    }
+
+
     // Загружаем библиотеку при открытии страницы
+
     loadTracks();
+
 </script>
 
 </body>
