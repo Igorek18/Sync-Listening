@@ -1,0 +1,244 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync-Listening</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #101116;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 50px auto;
+            padding: 25px;
+        }
+
+        h1 {
+            color: #9b8cff;
+            font-size: 34px;
+        }
+
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: #1c1d25;
+            border-radius: 14px;
+            padding: 22px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-top: 0;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin: 18px 0;
+            color: white;
+        }
+
+        button {
+            background: #7662e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #927fff;
+        }
+
+        .track {
+            background: #292a35;
+            border-radius: 9px;
+            padding: 15px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .track-name {
+            overflow-wrap: anywhere;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #message {
+            color: #a99aff;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 20px auto;
+                padding: 15px;
+            }
+
+            .track {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Sync-Listening</h1>
+    <p class="subtitle">
+        Совместное прослушивание музыки в реальном времени
+    </p>
+
+    <div class="panel">
+        <h2>Загрузка музыки</h2>
+
+        <input type="file" id="musicFile" accept=".mp3,audio/mpeg">
+
+        <button onclick="uploadMusic()">Загрузить композицию</button>
+
+        <div id="message"></div>
+    </div>
+
+    <div class="panel">
+        <h2>Музыкальная библиотека</h2>
+
+        <div id="trackList">
+            Загрузка композиций...
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Плеер</h2>
+
+        <div id="currentTrack">Композиция не выбрана</div>
+
+        <audio id="audioPlayer" controls></audio>
+    </div>
+
+</div>
+
+<script>
+    const audioPlayer = document.getElementById("audioPlayer");
+    const trackList = document.getElementById("trackList");
+    const message = document.getElementById("message");
+
+    // Загрузка композиции на сервер
+    async function uploadMusic() {
+        const fileInput = document.getElementById("musicFile");
+        const file = fileInput.files[0];
+
+        if (!file) {
+            message.textContent = "Выберите MP3-файл";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        message.textContent = "Загрузка...";
+
+        try {
+            const response = await fetch("/api/tracks", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || "Ошибка загрузки");
+            }
+
+            message.textContent = "Композиция успешно загружена!";
+            fileInput.value = "";
+
+            await loadTracks();
+
+        } catch (error) {
+            message.textContent = error.message;
+        }
+    }
+
+    // Получение списка композиций
+    async function loadTracks() {
+        try {
+            const response = await fetch("/api/tracks");
+
+            if (!response.ok) {
+                throw new Error("Не удалось получить библиотеку");
+            }
+
+            const tracks = await response.json();
+
+            trackList.innerHTML = "";
+
+            if (tracks.length === 0) {
+                trackList.textContent = "Библиотека пока пуста";
+                return;
+            }
+
+            tracks.forEach(track => {
+                const item = document.createElement("div");
+                item.className = "track";
+
+                const name = document.createElement("span");
+                name.className = "track-name";
+                name.textContent = track.title;
+
+                const button = document.createElement("button");
+                button.textContent = "Слушать";
+                button.addEventListener("click", () => playTrack(track));
+
+                item.appendChild(name);
+                item.appendChild(button);
+
+                trackList.appendChild(item);
+            });
+
+        } catch (error) {
+            trackList.textContent = error.message;
+        }
+    }
+
+    // Воспроизведение выбранной композиции
+    function playTrack(track) {
+        audioPlayer.src = track.url;
+
+        document.getElementById("currentTrack").textContent =
+            "Сейчас играет: " + track.title;
+
+        audioPlayer.play();
+    }
+
+    // Загружаем библиотеку при открытии страницы
+    loadTracks();
+</script>
+
+</body>
+</html>
